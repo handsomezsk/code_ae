@@ -35,7 +35,7 @@ class DEC(torch.nn.Module):
         self.dec_outputs = torch.nn.Linear(2*(args.dec_num_unit+int(args.code_rate_n / args.code_rate_k)), 1)
 
         self.attn = torch.nn.Linear(args.dec_num_unit+int(args.code_rate_n / args.code_rate_k), args.dec_num_unit, bias=False)
-
+        self.fc = torch.nn.Linear(args.dec_num_unit+int(args.code_rate_n / args.code_rate_k), int(args.code_rate_n / args.code_rate_k), bias=False)
         self.v = torch.nn.Linear(args.dec_num_unit, 1, bias=False)
 
     def dec_act(self, inputs):
@@ -82,15 +82,19 @@ class DEC(torch.nn.Module):
                 c2 = torch.bmm(a2, received)
                 out1 = torch.cat((out1,c1),dim=2)
                 out2 = torch.cat((out2,c2),dim=2)
+                input1=self.fc(out1)
+                input2=self.fc(out2)
                 rnn_out1 = out1
                 rnn_out2 = out2
             else:
-                out1, decoder_hidden1 = self.dec1_rnns(c1, decoder_hidden1)
-                out2, decoder_hidden2 = self.dec2_rnns(c2, decoder_hidden2)
+                out1, decoder_hidden1 = self.dec1_rnns(input1, decoder_hidden1)
+                out2, decoder_hidden2 = self.dec2_rnns(input2, decoder_hidden2)
                 c1 = torch.bmm(a1, received)
                 c2 = torch.bmm(a2, received)
                 out1 = torch.cat((out1,c1),dim=2)
                 out2 = torch.cat((out2,c2),dim=2)
+                input1=self.fc(out1)
+                input2=self.fc(out2)
                 rnn_out1 = torch.cat((rnn_out1, out1), dim=1)
                 rnn_out2 = torch.cat((rnn_out2, out2), dim=1)
 
