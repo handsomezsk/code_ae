@@ -32,7 +32,6 @@ class ENC(torch.nn.Module):
                                            dropout=0)
 
         self.enc_linear    = torch.nn.Linear(args.enc_num_unit, int(args.code_rate_n/args.code_rate_k))
-        self.fc = torch.nn.Linear(self.args.enc_num_unit, self.args.dec_num_unit)
 
     def set_precomp(self, mean_scalar, std_scalar):
         self.mean_scalar = mean_scalar.to(self.this_device)
