@@ -32,9 +32,9 @@ class DEC(torch.nn.Module):
                                    num_layers=2, bias=True, batch_first=True,
                                    dropout=args.dropout)
 
-        self.dec_outputs = torch.nn.Linear(2*(args.dec_num_unit+args.enc_num_unit), 1)
+        self.dec_outputs = torch.nn.Linear(2*args.dec_num_unit, 1)
 
-        self.attn = torch.nn.Linear(args.dec_num_unit+args.enc_num_unit, args.dec_num_unit, bias=False)
+        self.attn = torch.nn.Linear(args.dec_num_unit+int(args.code_rate_n / args.code_rate_k), args.dec_num_unit, bias=False)
 
         self.v = torch.nn.Linear(args.dec_num_unit, 1, bias=False)
 
@@ -54,42 +54,41 @@ class DEC(torch.nn.Module):
         else:
             return inputs
 
-    def attention(self, s, encoder_hidden):
+    def attention(self, s, hidden):
         s = s[1:2, :, :]
         s = s.transpose(0, 1)
-        src_len = encoder_hidden.shape[1]
+        src_len = hidden.shape[1]
 
         # repeat decoder hidden state src_len times
         # s = [batch_size, src_len, dec_hid_dim]
         # enc_output = [batch_size, src_len, enc_hid_dim * 2]
         s = s.repeat(1, src_len, 1)
         # energy = [batch_size, src_len, dec_hid_dim]
-        energy = torch.tanh(self.attn(torch.cat((s, encoder_hidden), dim=2)))
+        energy = torch.tanh(self.attn(torch.cat((s, hidden), dim=2)))
         # attention = [batch_size, src_len]
         attention = self.v(energy).squeeze(2)
         return F.softmax(attention, dim=1)
 
-    def forward(self, received, encoder_hidden, h0):
+    def forward(self, received):
         received = received.type(torch.FloatTensor).to(self.this_device)
+        h0 = torch.zeros(2, self.args.batch_size, self.args.dec_num_unit).to(self.this_device)
         for i in range(self.args.block_len):
             if i==0:
-                out1, decoder_hidden1 = self.dec1_rnns(received[:, i:i+1, :], h0)
-                out2, decoder_hidden2 = self.dec2_rnns(received[:, i:i+1, :], h0)
-                a1 = self.attention(decoder_hidden1, encoder_hidden).unsqueeze(1)
-                a2 = self.attention(decoder_hidden2, encoder_hidden).unsqueeze(1)
-                c1 = torch.bmm(a1, encoder_hidden)
-                c2 = torch.bmm(a2, encoder_hidden)
-                rnn_out1 = torch.cat((out1,c1), dim=2)
-                rnn_out2 = torch.cat((out2,c2), dim=2)
+                a1 = self.attention(h0, received).unsqueeze(1)
+                a2 = self.attention(h0, received).unsqueeze(1)
+                c1 = torch.bmm(a1, received)
+                c2 = torch.bmm(a2, received)
+                out1, decoder_hidden1 = self.dec1_rnns(c1, h0)
+                out2, decoder_hidden2 = self.dec2_rnns(c2, h0)
+                rnn_out1 = out1
+                rnn_out2 = out2
             else:
-                out1, decoder_hidden1 = self.dec1_rnns(received[:, i:i + 1, :], decoder_hidden1)
-                out2, decoder_hidden2 = self.dec2_rnns(received[:, i:i + 1, :], decoder_hidden2)
-                a1 = self.attention(decoder_hidden1, encoder_hidden).unsqueeze(1)
-                a2 = self.attention(decoder_hidden2, encoder_hidden).unsqueeze(1)
-                c1 = torch.bmm(a1, encoder_hidden)
-                c2 = torch.bmm(a2, encoder_hidden)
-                out1 = torch.cat((out1, c1), dim=2)
-                out2 = torch.cat((out2, c2), dim=2)
+                a1 = self.attention(decoder_hidden1, received).unsqueeze(1)
+                a2 = self.attention(decoder_hidden2, received).unsqueeze(1)
+                c1 = torch.bmm(a1, received)
+                c2 = torch.bmm(a2, received)
+                out1, decoder_hidden1 = self.dec1_rnns(c1, decoder_hidden1)
+                out2, decoder_hidden2 = self.dec2_rnns(c2, decoder_hidden2)
                 rnn_out1 = torch.cat((rnn_out1, out1), dim=1)
                 rnn_out2 = torch.cat((rnn_out2, out2), dim=1)
 

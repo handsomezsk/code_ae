@@ -39,19 +39,16 @@ def train(epoch, model, optimizer, args, use_cuda = False, verbose = True, mode 
         X_train    = torch.randint(0, 2, (args.batch_size, block_len, args.code_rate_k), dtype=torch.float)
 
         noise_shape = (args.batch_size, args.block_len, args.code_rate_n)
-        noise_shape_hidden = (args.batch_size, args.block_len, args.enc_num_unit)
         # train encoder/decoder with different SNR... seems to be a good practice.
         if mode == 'encoder':
             fwd_noise_codes  = generate_noise(noise_shape, args, snr_low=args.train_enc_channel_low, snr_high=args.train_enc_channel_high, mode = 'encoder')
-            fwd_noise_hidden = generate_noise(noise_shape_hidden, args, snr_low=args.train_enc_channel_low, snr_high=args.train_enc_channel_high, mode = 'encoder')
         else:
             fwd_noise_codes  = generate_noise(noise_shape, args, snr_low=args.train_dec_channel_low, snr_high=args.train_dec_channel_high, mode = 'decoder')
-            fwd_noise_hidden = generate_noise(noise_shape_hidden, args, snr_low=args.train_enc_channel_low,
-                                              snr_high=args.train_enc_channel_high, mode='decoder')
 
-        X_train, fwd_noise_codes, fwd_noise_hidden = X_train.to(device), fwd_noise_codes.to(device), fwd_noise_hidden.to(device)
 
-        output, code = model(X_train, fwd_noise_codes, fwd_noise_hidden)
+        X_train, fwd_noise_codes = X_train.to(device), fwd_noise_codes.to(device)
+
+        output, code = model(X_train, fwd_noise_codes)
         output = torch.clamp(output, 0.0, 1.0)
 
         if mode == 'encoder':
@@ -87,18 +84,14 @@ def validate(model, optimizer, args, use_cuda = False, verbose = True):
         for batch_idx in range(num_test_batch):
             X_test     = torch.randint(0, 2, (args.batch_size, args.block_len, args.code_rate_k), dtype=torch.float)
             noise_shape = (args.batch_size, args.block_len, args.code_rate_n)
-            noise_shape_hidden = (args.batch_size, args.block_len, args.enc_num_unit)
             fwd_noise  = generate_noise(noise_shape, args,
                                         snr_low=args.train_enc_channel_low,
                                         snr_high=args.train_enc_channel_low)
-            fwd_noise_hidden = generate_noise(noise_shape_hidden, args,
-                                       snr_low=args.train_enc_channel_low,
-                                       snr_high=args.train_enc_channel_low)
 
-            X_test, fwd_noise, fwd_noise_hidden= X_test.to(device), fwd_noise.to(device), fwd_noise_hidden.to(device)
+            X_test, fwd_noise= X_test.to(device), fwd_noise.to(device)
 
             optimizer.zero_grad()
-            output, codes = model(X_test, fwd_noise, fwd_noise_hidden)
+            output, codes = model(X_test, fwd_noise)
 
             output = torch.clamp(output, 0.0, 1.0)
 
@@ -163,14 +156,12 @@ def test(model, args, block_len = 'default',use_cuda = False):
             for batch_idx in range(num_test_batch):
                 X_test     = torch.randint(0, 2, (args.batch_size, block_len, args.code_rate_k), dtype=torch.float)
                 noise_shape = (args.batch_size, args.block_len, args.code_rate_n)
-                noise_shape_hidden = (args.batch_size, args.block_len, args.enc_num_unit)
                 # fwd_noise  = generate_noise(X_test.shape, args, test_sigma=sigma)
                 fwd_noise_codes = generate_noise(noise_shape, args, test_sigma=sigma)
-                noise_shape_hidden = generate_noise(noise_shape_hidden, args, test_sigma=sigma)
 
-                X_test, fwd_noise_codes, noise_shape_hidden= X_test.to(device), fwd_noise_codes.to(device), noise_shape_hidden.to(device)
+                X_test, fwd_noise_codes= X_test.to(device), fwd_noise_codes.to(device)
 
-                X_hat_test, the_codes = model(X_test, fwd_noise_codes, noise_shape_hidden)
+                X_hat_test, the_codes = model(X_test, fwd_noise_codes)
 
                 test_ber  += errors_ber(X_hat_test,X_test)
                 test_bler += errors_bler(X_hat_test,X_test)
@@ -207,7 +198,7 @@ def test(model, args, block_len = 'default',use_cuda = False):
         for idx in range(num_test_batch):
             X_test     = torch.randint(0, 2, (args.batch_size, block_len, args.code_rate_k), dtype=torch.float)
             X_test     = X_test.to(device)
-            X_code,_,_ = model.enc(X_test)
+            X_code     = model.enc(X_test)
             enc_power +=  torch.std(X_code)
     enc_power /= float(num_test_batch)
     print('encoder power is',enc_power.item())

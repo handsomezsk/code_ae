@@ -86,11 +86,8 @@ class ENC(torch.nn.Module):
             return x_input_norm
 
     def forward(self, inputs):
-        x_sys, hidden = self.enc_rnn(inputs)
+        x_sys,_ = self.enc_rnn(inputs)
         code = x_sys
-        s0 = hidden[1]
-        s = torch.tanh(self.fc(s0))
-        s = torch.stack((s,s))
         code  = self.enc_act(self.enc_linear(code))
         codes = self.power_constraint(code)
-        return codes, x_sys, s
+        return codes
