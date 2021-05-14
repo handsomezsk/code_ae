@@ -35,8 +35,7 @@ class DEC(torch.nn.Module):
         self.dec_outputs = torch.nn.Linear(2*args.dec_num_unit, 1)
         self.fc = torch.nn.Linear(2*args.dec_num_unit, args.dec_num_unit)
 
-        self.attn = torch.nn.Linear(2*args.dec_num_unit, args.dec_num_unit, bias=False)
-        self.v = torch.nn.Linear(args.dec_num_unit, 1, bias=False)
+        self.attn = torch.nn.Linear(2*args.dec_num_unit, 1, bias=False)
 
     def dec_act(self, inputs):
         if self.args.dec_act == 'tanh':
@@ -63,32 +62,29 @@ class DEC(torch.nn.Module):
         # enc_output = [batch_size, src_len, enc_hid_dim * 2]
         s = s.repeat(1, src_len, 1)
         # energy = [batch_size, src_len, dec_hid_dim]
-        energy = torch.tanh(self.attn(torch.cat((s, hidden), dim=2)))
+        attention = self.attn(torch.cat((s, hidden), dim=2)).squeeze(2)
         # attention = [batch_size, src_len]
-        attention = self.v(energy).squeeze(2)
         return F.softmax(attention, dim=1)
 
     def forward(self, received):
         received = received.type(torch.FloatTensor).to(self.this_device)
         out1, _ = self.dec1_rnns(received)
         out2, _ = self.dec2_rnns(received)
-        for i in range(self.args.block_len):
-            if i == 0:
-                rnn_out1 = out1[:, i:i+1, :]
-                rnn_out2 = out2[:, i:i+1, :]
-            else:
-                hid1=out1[:, i:i+1, :]
-                hid2=out2[:, i:i+1, :]
-                a1 = self.attention(hid1, out1[:, 0:i, :]).unsqueeze(1)
-                a2 = self.attention(hid2, out2[:, 0:i, :]).unsqueeze(1)
-                c1 = torch.bmm(a1, out1[:, 0:i, :])
-                c2 = torch.bmm(a2, out2[:, 0:i, :])
-                c1 = torch.cat((c1, hid1), dim=2)
-                c2 = torch.cat((c2, hid2), dim=2)
-                hid1 = self.fc(c1)
-                hid2 = self.fc(c2)
-                rnn_out1 = torch.cat((rnn_out1, hid1), dim=1)
-                rnn_out2 = torch.cat((rnn_out2, hid2), dim=1)
+        rnn_out1 = out1[:, 0:5, :]
+        rnn_out2 = out2[:, 0:5, :]
+        for i in range(5, self.args.block_len):
+            hid1=out1[:, i:i+1, :]
+            hid2=out2[:, i:i+1, :]
+            a1 = self.attention(hid1, out1[:, i-5:i, :]).unsqueeze(1)
+            a2 = self.attention(hid2, out2[:, i-5:i, :]).unsqueeze(1)
+            c1 = torch.bmm(a1, out1[:, i-5:i, :])
+            c2 = torch.bmm(a2, out2[:, i-5:i, :])
+            c1 = torch.cat((c1, hid1), dim=2)
+            c2 = torch.cat((c2, hid2), dim=2)
+            hid1 = self.fc(c1)
+            hid2 = self.fc(c2)
+            rnn_out1 = torch.cat((rnn_out1, hid1), dim=1)
+            rnn_out2 = torch.cat((rnn_out2, hid2), dim=1)
 
         for i in range(self.args.block_len):
             if (i >= self.args.block_len - self.args.D - 1):
