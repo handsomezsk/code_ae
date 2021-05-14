@@ -70,58 +70,25 @@ class DEC(torch.nn.Module):
 
     def forward(self, received):
         received = received.type(torch.FloatTensor).to(self.this_device)
+        out1, _ = self.dec1_rnns(received)
+        out2, _ = self.dec2_rnns(received)
         for i in range(self.args.block_len):
             if i == 0:
-                out1, hidden1 = self.dec1_rnns(received[:, i:i+1, :])
-                out2, hidden2 = self.dec2_rnns(received[:, i:i+1, :])
-                hidden1_ori1 = hidden1[0:1, :, :]
-                hidden1_tra2 = hidden1.transpose(0, 1)[:, 1:2, :]
-                hidden2_ori1 = hidden2[0:1, :, :]
-                hidden2_tra2 = hidden2.transpose(0, 1)[:, 1:2, :]
-                hiddens1 = hidden1_tra2
-                hiddens2 = hidden2_tra2
-                a1 = self.attention(hidden1_tra2, hiddens1).unsqueeze(1)
-                a2 = self.attention(hidden2_tra2, hiddens2).unsqueeze(1)
-                
-                c1 = torch.bmm(a1, hiddens1)
-                hidden1 = torch.cat((c1, hidden1_tra2), dim=2)
-                hidden1 = self.fc(hidden1)
-                hidden1 = hidden1.transpose(0, 1)
-                hidden1 = torch.cat((hidden1_ori1, hidden1), dim=0)
-                c2 = torch.bmm(a2, hiddens2)
-                hidden2 = torch.cat((c2, hidden2_tra2), dim=2)
-                hidden2 = self.fc(hidden2)
-                hidden2 = hidden2.transpose(0, 1)
-                hidden2 = torch.cat((hidden2_ori1, hidden2), dim=0)
-
-                rnn_out1 = out1
-                rnn_out2 = out2
+                rnn_out1 = out1[:, i:i+1, :]
+                rnn_out2 = out2[:, i:i+1, :]
             else:
-                out1, hidden1 = self.dec1_rnns(received[:, i:i+1, :], hidden1)
-                out2, hidden2 = self.dec2_rnns(received[:, i:i+1, :], hidden2)
-
-                hidden1_ori1 = hidden1[0:1, :, :]
-                hidden1_tra2 = hidden1.transpose(0, 1)[:, 1:2, :]
-                hidden2_ori1 = hidden2[0:1, :, :]
-                hidden2_tra2 = hidden2.transpose(0, 1)[:, 1:2, :]
-                hiddens1 = torch.cat((hiddens1, hidden1_tra2), dim=1)
-                hiddens2 = torch.cat((hiddens2, hidden2_tra2), dim=1)
-                a1 = self.attention(hidden1_tra2, hiddens1).unsqueeze(1)
-                a2 = self.attention(hidden2_tra2, hiddens2).unsqueeze(1)
-
-                c1 = torch.bmm(a1, hiddens1)
-                hidden1 = torch.cat((c1, hidden1_tra2), dim=2)
-                hidden1 = self.fc(hidden1)
-                hidden1 = hidden1.transpose(0, 1)
-                hidden1 = torch.cat((hidden1_ori1, hidden1), dim=0)
-                c2 = torch.bmm(a2, hiddens2)
-                hidden2 = torch.cat((c2, hidden2_tra2), dim=2)
-                hidden2 = self.fc(hidden2)
-                hidden2 = hidden2.transpose(0, 1)
-                hidden2 = torch.cat((hidden2_ori1, hidden2), dim=0)
-
-                rnn_out1 = torch.cat((rnn_out1, out1), dim=1)
-                rnn_out2 = torch.cat((rnn_out2, out2), dim=1)
+                hid1=out1[:, i:i+1, :]
+                hid2=out2[:, i:i+1, :]
+                a1 = self.attention(hid1, out1[:, 0:i, :]).unsqueeze(1)
+                a2 = self.attention(hid2, out2[:, 0:i, :]).unsqueeze(1)
+                c1 = torch.bmm(a1, out1[:, 0:i, :])
+                c2 = torch.bmm(a2, out2[:, 0:i, :])
+                c1 = torch.cat((c1, hid1), dim=2)
+                c2 = torch.cat((c2, hid2), dim=2)
+                hid1 = self.fc(c1)
+                hid2 = self.fc(c2)
+                rnn_out1 = torch.cat((rnn_out1, hid1), dim=1)
+                rnn_out2 = torch.cat((rnn_out2, hid2), dim=1)
 
         for i in range(self.args.block_len):
             if (i >= self.args.block_len - self.args.D - 1):
