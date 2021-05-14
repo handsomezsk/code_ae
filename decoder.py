@@ -75,16 +75,12 @@ class DEC(torch.nn.Module):
         for i in range(5, self.args.block_len):
             hid1=out1[:, i:i+1, :]
             hid2=out2[:, i:i+1, :]
-            a1 = self.attention(hid1, out1[:, i-5:i, :]).unsqueeze(1)
-            a2 = self.attention(hid2, out2[:, i-5:i, :]).unsqueeze(1)
-            c1 = torch.bmm(a1, out1[:, i-5:i, :])
-            c2 = torch.bmm(a2, out2[:, i-5:i, :])
-            c1 = torch.cat((c1, hid1), dim=2)
-            c2 = torch.cat((c2, hid2), dim=2)
-            hid1 = self.fc(c1)
-            hid2 = self.fc(c2)
-            rnn_out1 = torch.cat((rnn_out1, hid1), dim=1)
-            rnn_out2 = torch.cat((rnn_out2, hid2), dim=1)
+            a1 = self.attention(hid1, out1[:, i-5:i+1, :]).unsqueeze(1)
+            a2 = self.attention(hid2, out2[:, i-5:i+1, :]).unsqueeze(1)
+            c1 = torch.bmm(a1, out1[:, i-5:i+1, :])
+            c2 = torch.bmm(a2, out2[:, i-5:i+1, :])
+            rnn_out1 = torch.cat((rnn_out1, c1), dim=1)
+            rnn_out2 = torch.cat((rnn_out2, c2), dim=1)
 
         for i in range(self.args.block_len):
             if (i >= self.args.block_len - self.args.D - 1):
